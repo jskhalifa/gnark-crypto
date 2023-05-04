@@ -317,7 +317,7 @@ func (p *{{ $.TJacobian }}) MultiExp(points []{{ $.TAffine }}, scalars []fr.Elem
 		// before splitting, let's see if we end up with more tasks than thread;
 		cPostSplit := bestC(nbPoints/2)
 		nbChunksPostSplit := int(computeNbChunks(cPostSplit))
-		nbTasksPostSplit := nbChunksPostSplit
+		nbTasksPostSplit := nbChunksPostSplit * 2
 		newNbTasks := int(math.Ceil(float64(config.NbTasks) / 2.0))
 		if (nbTasksPostSplit <= newNbTasks ) || ( nbTasksPostSplit - newNbTasks ) <= ( config.NbTasks - nbChunks) {
 			// if postSplit we still have less tasks than available CPU
@@ -382,7 +382,7 @@ func _innerMsm{{ $.UPointName }}(p *{{ $.TJacobian }}, c uint64, points []{{ $.T
 			// note that this doesn't strictly respect the MaxConcurrency limit, but 
 			// it shouldn't happen often, and it's better in most cases.
 			sem <- struct{}{} 
-			
+
 			go processChunk(uint64(j),chSplit, c, points[:split], digits[j*n:(j*n)+split], sem)
 			go processChunk(uint64(j),chSplit, c, points[split:], digits[(j*n)+split:(j+1)*n], sem)
 			go func(chunkID int) {

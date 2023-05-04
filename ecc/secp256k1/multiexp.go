@@ -116,7 +116,7 @@ func (p *G1Jac) MultiExp(points []G1Affine, scalars []fr.Element, config ecc.Mul
 		// before splitting, let's see if we end up with more tasks than thread;
 		cPostSplit := bestC(nbPoints / 2)
 		nbChunksPostSplit := int(computeNbChunks(cPostSplit))
-		nbTasksPostSplit := nbChunksPostSplit
+		nbTasksPostSplit := nbChunksPostSplit * 2
 		newNbTasks := int(math.Ceil(float64(config.NbTasks) / 2.0))
 		if (nbTasksPostSplit <= newNbTasks) || (nbTasksPostSplit-newNbTasks) <= (config.NbTasks-nbChunks) {
 			// if postSplit we still have less tasks than available CPU
