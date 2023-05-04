@@ -80,6 +80,12 @@ func (p *G1Jac) MultiExp(points []G1Affine, scalars []fr.Element, config ecc.Mul
 		return nil, errors.New("invalid config: config.NbTasks > 1024")
 	}
 
+	if config.MaxConcurrency <= 0 {
+		config.MaxConcurrency = config.NbTasks
+	} else if config.MaxConcurrency > 1024 {
+		return nil, errors.New("invalid config: config.MaxConcurrency > 1024")
+	}
+
 	// here, we compute the best C for nbPoints
 	// we split recursively until nbChunks(c) >= nbTasks,
 	bestC := func(nbPoints int) uint64 {
@@ -151,8 +157,8 @@ func _innerMsmG1(p *G1Jac, c uint64, points []G1Affine, scalars []fr.Element, co
 	}
 
 	// we use a semaphore to limit the number of go routines running concurrently
-	sem := make(chan struct{}, config.NbTasks)
-	for i := 0; i < config.NbTasks; i++ {
+	sem := make(chan struct{}, config.MaxConcurrency*2)
+	for i := 0; i < config.MaxConcurrency; i++ {
 		sem <- struct{}{}
 	}
 	defer close(sem)
@@ -169,6 +175,13 @@ func _innerMsmG1(p *G1Jac, c uint64, points []G1Affine, scalars []fr.Element, co
 			// else what would happen is this go routine would finish much later than the others.
 			chSplit := make(chan g1JacExtended, 2)
 			split := n / 2
+
+			// we are running 2 go routine for this task
+			// add a token in the semaphore.
+			// note that this doesn't strictly respect the MaxConcurrency limit, but
+			// it shouldn't happen often, and it's better in most cases.
+			sem <- struct{}{}
+
 			go processChunk(uint64(j), chSplit, c, points[:split], digits[j*n:(j*n)+split], sem)
 			go processChunk(uint64(j), chSplit, c, points[split:], digits[(j*n)+split:(j+1)*n], sem)
 			go func(chunkID int) {
