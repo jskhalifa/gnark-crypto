@@ -234,10 +234,10 @@ func processChunk{{ $.UPointName }}BatchAffine[BJE ib{{ $.TJacobianExtended }},B
 		total.add(&runningSum)
 	}
 
-	chRes <- total
-
 	// release semaphore
 	sem <- struct{}{}
+
+	chRes <- total
 }
 
 // we declare the buckets as fixed-size array types

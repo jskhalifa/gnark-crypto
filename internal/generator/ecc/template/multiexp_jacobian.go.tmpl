@@ -62,10 +62,10 @@ func processChunk{{ $.UPointName }}Jacobian[B ib{{ $.TJacobianExtended }}](chunk
 	   total.add(&runningSum)
    }
 
-   chRes <- total
-
    // release semaphore
    sem <- struct{}{}
+
+   chRes <- total
 }
 
 // we declare the buckets as fixed-size array types

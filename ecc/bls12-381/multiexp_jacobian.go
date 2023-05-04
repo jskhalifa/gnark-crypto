@@ -60,10 +60,10 @@ func processChunkG1Jacobian[B ibg1JacExtended](chunk uint64,
 		total.add(&runningSum)
 	}
 
-	chRes <- total
-
 	// release semaphore
 	sem <- struct{}{}
+
+	chRes <- total
 }
 
 // we declare the buckets as fixed-size array types
@@ -144,10 +144,10 @@ func processChunkG2Jacobian[B ibg2JacExtended](chunk uint64,
 		total.add(&runningSum)
 	}
 
-	chRes <- total
-
 	// release semaphore
 	sem <- struct{}{}
+
+	chRes <- total
 }
 
 // we declare the buckets as fixed-size array types

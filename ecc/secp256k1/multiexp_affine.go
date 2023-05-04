@@ -229,10 +229,10 @@ func processChunkG1BatchAffine[BJE ibg1JacExtended, B ibG1Affine, BS bitSet, TP 
 		total.add(&runningSum)
 	}
 
-	chRes <- total
-
 	// release semaphore
 	sem <- struct{}{}
+
+	chRes <- total
 }
 
 // we declare the buckets as fixed-size array types
