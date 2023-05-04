@@ -306,7 +306,7 @@ func (p *{{ $.TJacobian }}) MultiExp(points []{{ $.TAffine }}, scalars []fr.Elem
 	C := bestC(nbPoints)
 	nbChunks := int(computeNbChunks(C))
 
-	// if we don't utilise all the tasks (CPU in the default case) that we could, let's see if it's worth it to split
+	// if we don't utilize all the tasks (CPU in the default case) that we could, let's see if it's worth it to split
 	if config.NbTasks > 1 && nbChunks < config.NbTasks {
 		// before splitting, let's see if we end up with more tasks than thread;
 		cSplit := bestC(nbPoints/2)
@@ -350,6 +350,13 @@ func _innerMsm{{ $.UPointName }}(p *{{ $.TJacobian }}, c uint64, points []{{ $.T
 		chChunks[i] = make(chan {{ $.TJacobianExtended }}, 1)
 	}
 
+	// we use a semaphore to limit the number of go routines running concurrently
+	sem := make(chan struct{}, config.NbTasks)
+	for i := 0; i < config.NbTasks; i++ {
+		sem <- struct{}{}
+	}
+	defer close(sem)
+
 	// the last chunk may be processed with a different method than the rest, as it could be smaller.
 	n := len(points)
 	for j := int(nbChunks - 1); j >= 0; j-- {
@@ -362,8 +369,8 @@ func _innerMsm{{ $.UPointName }}(p *{{ $.TJacobian }}, c uint64, points []{{ $.T
 			// else what would happen is this go routine would finish much later than the others.
 			chSplit := make(chan {{ $.TJacobianExtended }}, 2)
 			split := n / 2
-			go processChunk(uint64(j),chSplit, c, points[:split], digits[j*n:(j*n)+split])
-			go processChunk(uint64(j),chSplit, c, points[split:], digits[(j*n)+split:(j+1)*n])
+			go processChunk(uint64(j),chSplit, c, points[:split], digits[j*n:(j*n)+split], sem)
+			go processChunk(uint64(j),chSplit, c, points[split:], digits[(j*n)+split:(j+1)*n], sem)
 			go func(chunkID int) {
 				s1 := <-chSplit
 				s2 := <-chSplit
@@ -373,7 +380,7 @@ func _innerMsm{{ $.UPointName }}(p *{{ $.TJacobian }}, c uint64, points []{{ $.T
 			}(j)
 			continue
 		}
-		go processChunk(uint64(j), chChunks[j], c, points, digits[j*n:(j+1)*n])
+		go processChunk(uint64(j), chChunks[j], c, points, digits[j*n:(j+1)*n], sem)
 	}
 
 	return msmReduceChunk{{ $.TAffine }}(p, int(c), chChunks[:])
@@ -382,7 +389,7 @@ func _innerMsm{{ $.UPointName }}(p *{{ $.TJacobian }}, c uint64, points []{{ $.T
 
 // getChunkProcessor{{ $.UPointName }} decides, depending on c window size and statistics for the chunk
 // to return the best algorithm to process the chunk.
-func getChunkProcessor{{ $.UPointName }}(c uint64, stat chunkStat) func(chunkID uint64, chRes chan<- {{ $.TJacobianExtended }}, c uint64, points []{{ $.TAffine }}, digits []uint16) {
+func getChunkProcessor{{ $.UPointName }}(c uint64, stat chunkStat) func(chunkID uint64, chRes chan<- {{ $.TJacobianExtended }}, c uint64, points []{{ $.TAffine }}, digits []uint16, sem chan struct{}) {
 	switch c {
 		{{- range $c :=  $.LastCRange}}
 		case {{$c}}:

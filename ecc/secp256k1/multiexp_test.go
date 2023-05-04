@@ -302,11 +302,17 @@ func _innerMsmG1Reference(p *G1Jac, points []G1Affine, scalars []fr.Element, con
 		chChunks[i] = make(chan g1JacExtended, 1)
 	}
 
+	// semaphore to limit the number of go routines running in parallel
+	sem := make(chan struct{}, config.NbTasks)
+	for i := 0; i < config.NbTasks; i++ {
+		sem <- struct{}{}
+	}
+
 	// the last chunk may be processed with a different method than the rest, as it could be smaller.
 	n := len(points)
 	for j := int(nbChunks - 1); j >= 0; j-- {
 		processChunk := processChunkG1Jacobian[bucketg1JacExtendedC15]
-		go processChunk(uint64(j), chChunks[j], 15, points, digits[j*n:(j+1)*n])
+		go processChunk(uint64(j), chChunks[j], 15, points, digits[j*n:(j+1)*n], sem)
 	}
 
 	return msmReduceChunkG1Affine(p, int(15), chChunks[:])

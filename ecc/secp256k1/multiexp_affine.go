@@ -36,7 +36,11 @@ func processChunkG1BatchAffine[BJE ibg1JacExtended, B ibG1Affine, BS bitSet, TP 
 	chRes chan<- g1JacExtended,
 	c uint64,
 	points []G1Affine,
-	digits []uint16) {
+	digits []uint16,
+	sem chan struct{}) {
+
+	// acquire semaphore
+	<-sem
 
 	// the batch affine addition needs independent points; in other words, for a window of batchSize
 	// we want to hit independent bucketIDs when processing the digit. if there is a conflict (we're trying
@@ -227,6 +231,8 @@ func processChunkG1BatchAffine[BJE ibg1JacExtended, B ibG1Affine, BS bitSet, TP 
 
 	chRes <- total
 
+	// release semaphore
+	sem <- struct{}{}
 }
 
 // we declare the buckets as fixed-size array types

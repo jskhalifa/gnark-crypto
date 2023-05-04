@@ -329,11 +329,18 @@ func _innerMsm{{ $.UPointName }}Reference(p *{{ $.TJacobian }}, points []{{ $.TA
 		chChunks[i] = make(chan {{ $.TJacobianExtended }}, 1)
 	}
 
+	// semaphore to limit the number of go routines running in parallel
+	sem := make(chan struct{}, config.NbTasks)
+	for i := 0; i < config.NbTasks; i++ {
+		sem <- struct{}{}
+	}
+
+
 	// the last chunk may be processed with a different method than the rest, as it could be smaller.
 	n := len(points)
 	for j := int(nbChunks - 1); j >= 0; j-- {
 		processChunk := processChunk{{ $.UPointName }}Jacobian[bucket{{ $.TJacobianExtended }}C{{$.cmax}}]
-		go processChunk(uint64(j), chChunks[j], {{$.cmax}}, points, digits[j*n:(j+1)*n])
+		go processChunk(uint64(j), chChunks[j], {{$.cmax}}, points, digits[j*n:(j+1)*n], sem)
 	}
 
 	return msmReduceChunk{{ $.TAffine }}(p, int({{$.cmax}}), chChunks[:])

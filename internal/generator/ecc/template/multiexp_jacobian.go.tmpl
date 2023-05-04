@@ -21,9 +21,11 @@ func processChunk{{ $.UPointName }}Jacobian[B ib{{ $.TJacobianExtended }}](chunk
 	chRes chan<- {{ $.TJacobianExtended }},
 	c uint64,
 	points []{{ $.TAffine }},
-	digits []uint16) {
+	digits []uint16,
+	sem chan struct{}) {
 
-
+	// acquire semaphore
+	<-sem
 
    var buckets B
    for i := 0 ; i < len(buckets); i++ {
@@ -61,6 +63,9 @@ func processChunk{{ $.UPointName }}Jacobian[B ib{{ $.TJacobianExtended }}](chunk
    }
 
    chRes <- total
+
+   // release semaphore
+   sem <- struct{}{}
 }
 
 // we declare the buckets as fixed-size array types

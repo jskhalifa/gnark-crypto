@@ -20,7 +20,11 @@ func processChunkG1Jacobian[B ibg1JacExtended](chunk uint64,
 	chRes chan<- g1JacExtended,
 	c uint64,
 	points []G1Affine,
-	digits []uint16) {
+	digits []uint16,
+	sem chan struct{}) {
+
+	// acquire semaphore
+	<-sem
 
 	var buckets B
 	for i := 0; i < len(buckets); i++ {
@@ -57,6 +61,9 @@ func processChunkG1Jacobian[B ibg1JacExtended](chunk uint64,
 	}
 
 	chRes <- total
+
+	// release semaphore
+	sem <- struct{}{}
 }
 
 // we declare the buckets as fixed-size array types
@@ -83,7 +90,11 @@ func processChunkG2Jacobian[B ibg2JacExtended](chunk uint64,
 	chRes chan<- g2JacExtended,
 	c uint64,
 	points []G2Affine,
-	digits []uint16) {
+	digits []uint16,
+	sem chan struct{}) {
+
+	// acquire semaphore
+	<-sem
 
 	var buckets B
 	for i := 0; i < len(buckets); i++ {
@@ -120,6 +131,9 @@ func processChunkG2Jacobian[B ibg2JacExtended](chunk uint64,
 	}
 
 	chRes <- total
+
+	// release semaphore
+	sem <- struct{}{}
 }
 
 // we declare the buckets as fixed-size array types

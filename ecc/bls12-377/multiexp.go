@@ -105,7 +105,7 @@ func (p *G1Jac) MultiExp(points []G1Affine, scalars []fr.Element, config ecc.Mul
 	C := bestC(nbPoints)
 	nbChunks := int(computeNbChunks(C))
 
-	// if we don't utilise all the tasks (CPU in the default case) that we could, let's see if it's worth it to split
+	// if we don't utilize all the tasks (CPU in the default case) that we could, let's see if it's worth it to split
 	if config.NbTasks > 1 && nbChunks < config.NbTasks {
 		// before splitting, let's see if we end up with more tasks than thread;
 		cSplit := bestC(nbPoints / 2)
@@ -149,6 +149,13 @@ func _innerMsmG1(p *G1Jac, c uint64, points []G1Affine, scalars []fr.Element, co
 		chChunks[i] = make(chan g1JacExtended, 1)
 	}
 
+	// we use a semaphore to limit the number of go routines running concurrently
+	sem := make(chan struct{}, config.NbTasks)
+	for i := 0; i < config.NbTasks; i++ {
+		sem <- struct{}{}
+	}
+	defer close(sem)
+
 	// the last chunk may be processed with a different method than the rest, as it could be smaller.
 	n := len(points)
 	for j := int(nbChunks - 1); j >= 0; j-- {
@@ -161,8 +168,8 @@ func _innerMsmG1(p *G1Jac, c uint64, points []G1Affine, scalars []fr.Element, co
 			// else what would happen is this go routine would finish much later than the others.
 			chSplit := make(chan g1JacExtended, 2)
 			split := n / 2
-			go processChunk(uint64(j), chSplit, c, points[:split], digits[j*n:(j*n)+split])
-			go processChunk(uint64(j), chSplit, c, points[split:], digits[(j*n)+split:(j+1)*n])
+			go processChunk(uint64(j), chSplit, c, points[:split], digits[j*n:(j*n)+split], sem)
+			go processChunk(uint64(j), chSplit, c, points[split:], digits[(j*n)+split:(j+1)*n], sem)
 			go func(chunkID int) {
 				s1 := <-chSplit
 				s2 := <-chSplit
@@ -172,7 +179,7 @@ func _innerMsmG1(p *G1Jac, c uint64, points []G1Affine, scalars []fr.Element, co
 			}(j)
 			continue
 		}
-		go processChunk(uint64(j), chChunks[j], c, points, digits[j*n:(j+1)*n])
+		go processChunk(uint64(j), chChunks[j], c, points, digits[j*n:(j+1)*n], sem)
 	}
 
 	return msmReduceChunkG1Affine(p, int(c), chChunks[:])
@@ -180,7 +187,7 @@ func _innerMsmG1(p *G1Jac, c uint64, points []G1Affine, scalars []fr.Element, co
 
 // getChunkProcessorG1 decides, depending on c window size and statistics for the chunk
 // to return the best algorithm to process the chunk.
-func getChunkProcessorG1(c uint64, stat chunkStat) func(chunkID uint64, chRes chan<- g1JacExtended, c uint64, points []G1Affine, digits []uint16) {
+func getChunkProcessorG1(c uint64, stat chunkStat) func(chunkID uint64, chRes chan<- g1JacExtended, c uint64, points []G1Affine, digits []uint16, sem chan struct{}) {
 	switch c {
 
 	case 2:
@@ -362,7 +369,7 @@ func (p *G2Jac) MultiExp(points []G2Affine, scalars []fr.Element, config ecc.Mul
 	C := bestC(nbPoints)
 	nbChunks := int(computeNbChunks(C))
 
-	// if we don't utilise all the tasks (CPU in the default case) that we could, let's see if it's worth it to split
+	// if we don't utilize all the tasks (CPU in the default case) that we could, let's see if it's worth it to split
 	if config.NbTasks > 1 && nbChunks < config.NbTasks {
 		// before splitting, let's see if we end up with more tasks than thread;
 		cSplit := bestC(nbPoints / 2)
@@ -406,6 +413,13 @@ func _innerMsmG2(p *G2Jac, c uint64, points []G2Affine, scalars []fr.Element, co
 		chChunks[i] = make(chan g2JacExtended, 1)
 	}
 
+	// we use a semaphore to limit the number of go routines running concurrently
+	sem := make(chan struct{}, config.NbTasks)
+	for i := 0; i < config.NbTasks; i++ {
+		sem <- struct{}{}
+	}
+	defer close(sem)
+
 	// the last chunk may be processed with a different method than the rest, as it could be smaller.
 	n := len(points)
 	for j := int(nbChunks - 1); j >= 0; j-- {
@@ -418,8 +432,8 @@ func _innerMsmG2(p *G2Jac, c uint64, points []G2Affine, scalars []fr.Element, co
 			// else what would happen is this go routine would finish much later than the others.
 			chSplit := make(chan g2JacExtended, 2)
 			split := n / 2
-			go processChunk(uint64(j), chSplit, c, points[:split], digits[j*n:(j*n)+split])
-			go processChunk(uint64(j), chSplit, c, points[split:], digits[(j*n)+split:(j+1)*n])
+			go processChunk(uint64(j), chSplit, c, points[:split], digits[j*n:(j*n)+split], sem)
+			go processChunk(uint64(j), chSplit, c, points[split:], digits[(j*n)+split:(j+1)*n], sem)
 			go func(chunkID int) {
 				s1 := <-chSplit
 				s2 := <-chSplit
@@ -429,7 +443,7 @@ func _innerMsmG2(p *G2Jac, c uint64, points []G2Affine, scalars []fr.Element, co
 			}(j)
 			continue
 		}
-		go processChunk(uint64(j), chChunks[j], c, points, digits[j*n:(j+1)*n])
+		go processChunk(uint64(j), chChunks[j], c, points, digits[j*n:(j+1)*n], sem)
 	}
 
 	return msmReduceChunkG2Affine(p, int(c), chChunks[:])
@@ -437,7 +451,7 @@ func _innerMsmG2(p *G2Jac, c uint64, points []G2Affine, scalars []fr.Element, co
 
 // getChunkProcessorG2 decides, depending on c window size and statistics for the chunk
 // to return the best algorithm to process the chunk.
-func getChunkProcessorG2(c uint64, stat chunkStat) func(chunkID uint64, chRes chan<- g2JacExtended, c uint64, points []G2Affine, digits []uint16) {
+func getChunkProcessorG2(c uint64, stat chunkStat) func(chunkID uint64, chRes chan<- g2JacExtended, c uint64, points []G2Affine, digits []uint16, sem chan struct{}) {
 	switch c {
 
 	case 2:
