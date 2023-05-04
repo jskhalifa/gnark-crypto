@@ -73,9 +73,10 @@ func (p *G1Jac) MultiExp(points []G1Affine, scalars []fr.Element, config ecc.Mul
 		return nil, errors.New("len(points) != len(scalars)")
 	}
 
-	// if nbTasks is not set, use all available CPUs
 	if config.NbTasks <= 0 {
-		config.NbTasks = runtime.NumCPU()
+		// if nbTasks is not set, use twice the number of CPUs
+		// this is a good default value for most cases.
+		config.NbTasks = runtime.NumCPU() * 2
 	} else if config.NbTasks > 1024 {
 		return nil, errors.New("invalid config: config.NbTasks > 1024")
 	}
@@ -337,9 +338,10 @@ func (p *G2Jac) MultiExp(points []G2Affine, scalars []fr.Element, config ecc.Mul
 		return nil, errors.New("len(points) != len(scalars)")
 	}
 
-	// if nbTasks is not set, use all available CPUs
 	if config.NbTasks <= 0 {
-		config.NbTasks = runtime.NumCPU()
+		// if nbTasks is not set, use twice the number of CPUs
+		// this is a good default value for most cases.
+		config.NbTasks = runtime.NumCPU() * 2
 	} else if config.NbTasks > 1024 {
 		return nil, errors.New("invalid config: config.NbTasks > 1024")
 	}
