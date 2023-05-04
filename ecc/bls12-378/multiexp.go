@@ -74,9 +74,8 @@ func (p *G1Jac) MultiExp(points []G1Affine, scalars []fr.Element, config ecc.Mul
 	}
 
 	if config.NbTasks <= 0 {
-		// if nbTasks is not set, use twice the number of CPUs
-		// this is a good default value for most cases.
-		config.NbTasks = runtime.NumCPU() * 2
+		// if nbTasks is not set, use all available CPUs
+		config.NbTasks = runtime.NumCPU()
 	} else if config.NbTasks > 1024 {
 		return nil, errors.New("invalid config: config.NbTasks > 1024")
 	}
@@ -109,13 +108,14 @@ func (p *G1Jac) MultiExp(points []G1Affine, scalars []fr.Element, config ecc.Mul
 	// if we don't utilize all the tasks (CPU in the default case) that we could, let's see if it's worth it to split
 	if config.NbTasks > 1 && nbChunks < config.NbTasks {
 		// before splitting, let's see if we end up with more tasks than thread;
-		cSplit := bestC(nbPoints / 2)
-		nbChunksPostSplit := int(computeNbChunks(cSplit))
-		nbTasksPostSplit := nbChunksPostSplit * 2
-		if (nbTasksPostSplit <= config.NbTasks/2) || (nbTasksPostSplit-config.NbTasks/2) <= (config.NbTasks-nbChunks) {
+		cPostSplit := bestC(nbPoints / 2)
+		nbChunksPostSplit := int(computeNbChunks(cPostSplit))
+		nbTasksPostSplit := nbChunksPostSplit
+		newNbTasks := int(math.Ceil(float64(config.NbTasks) / 2.0))
+		if (nbTasksPostSplit <= newNbTasks) || (nbTasksPostSplit-newNbTasks) <= (config.NbTasks-nbChunks) {
 			// if postSplit we still have less tasks than available CPU
 			// or if we have more tasks BUT the difference of CPU usage is in our favor, we split.
-			config.NbTasks /= 2
+			config.NbTasks = newNbTasks
 			var _p G1Jac
 			chDone := make(chan struct{}, 1)
 			go func() {
@@ -341,9 +341,8 @@ func (p *G2Jac) MultiExp(points []G2Affine, scalars []fr.Element, config ecc.Mul
 	}
 
 	if config.NbTasks <= 0 {
-		// if nbTasks is not set, use twice the number of CPUs
-		// this is a good default value for most cases.
-		config.NbTasks = runtime.NumCPU() * 2
+		// if nbTasks is not set, use all available CPUs
+		config.NbTasks = runtime.NumCPU()
 	} else if config.NbTasks > 1024 {
 		return nil, errors.New("invalid config: config.NbTasks > 1024")
 	}
@@ -376,13 +375,14 @@ func (p *G2Jac) MultiExp(points []G2Affine, scalars []fr.Element, config ecc.Mul
 	// if we don't utilize all the tasks (CPU in the default case) that we could, let's see if it's worth it to split
 	if config.NbTasks > 1 && nbChunks < config.NbTasks {
 		// before splitting, let's see if we end up with more tasks than thread;
-		cSplit := bestC(nbPoints / 2)
-		nbChunksPostSplit := int(computeNbChunks(cSplit))
-		nbTasksPostSplit := nbChunksPostSplit * 2
-		if (nbTasksPostSplit <= config.NbTasks/2) || (nbTasksPostSplit-config.NbTasks/2) <= (config.NbTasks-nbChunks) {
+		cPostSplit := bestC(nbPoints / 2)
+		nbChunksPostSplit := int(computeNbChunks(cPostSplit))
+		nbTasksPostSplit := nbChunksPostSplit
+		newNbTasks := int(math.Ceil(float64(config.NbTasks) / 2.0))
+		if (nbTasksPostSplit <= newNbTasks) || (nbTasksPostSplit-newNbTasks) <= (config.NbTasks-nbChunks) {
 			// if postSplit we still have less tasks than available CPU
 			// or if we have more tasks BUT the difference of CPU usage is in our favor, we split.
-			config.NbTasks /= 2
+			config.NbTasks = newNbTasks
 			var _p G2Jac
 			chDone := make(chan struct{}, 1)
 			go func() {
