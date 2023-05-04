@@ -73,17 +73,8 @@ func (p *G1Jac) MultiExp(points []G1Affine, scalars []fr.Element, config ecc.Mul
 		return nil, errors.New("len(points) != len(scalars)")
 	}
 
-	if config.NbTasks <= 0 {
-		// if nbTasks is not set, use all available CPUs
-		config.NbTasks = runtime.NumCPU()
-	} else if config.NbTasks > 1024 {
+	if config.NbTasks > 1024 {
 		return nil, errors.New("invalid config: config.NbTasks > 1024")
-	}
-
-	if config.MaxConcurrency <= 0 {
-		config.MaxConcurrency = config.NbTasks
-	} else if config.MaxConcurrency > 1024 {
-		return nil, errors.New("invalid config: config.MaxConcurrency > 1024")
 	}
 
 	// here, we compute the best C for nbPoints
@@ -111,28 +102,38 @@ func (p *G1Jac) MultiExp(points []G1Affine, scalars []fr.Element, config ecc.Mul
 	C := bestC(nbPoints)
 	nbChunks := int(computeNbChunks(C))
 
-	// if we don't utilize all the tasks (CPU in the default case) that we could, let's see if it's worth it to split
-	if config.NbTasks > 1 && nbChunks < config.NbTasks {
-		// before splitting, let's see if we end up with more tasks than thread;
-		cPostSplit := bestC(nbPoints / 2)
-		nbChunksPostSplit := int(computeNbChunks(cPostSplit))
-		nbTasksPostSplit := nbChunksPostSplit * 2
-		newNbTasks := int(math.Ceil(float64(config.NbTasks) / 2.0))
-		if (nbTasksPostSplit <= newNbTasks) || (nbTasksPostSplit-newNbTasks) <= (config.NbTasks-nbChunks) {
-			// if postSplit we still have less tasks than available CPU
-			// or if we have more tasks BUT the difference of CPU usage is in our favor, we split.
-			config.NbTasks = newNbTasks
-			var _p G1Jac
-			chDone := make(chan struct{}, 1)
-			go func() {
-				_p.MultiExp(points[:nbPoints/2], scalars[:nbPoints/2], config)
-				close(chDone)
-			}()
-			p.MultiExp(points[nbPoints/2:], scalars[nbPoints/2:], config)
-			<-chDone
-			p.AddAssign(&_p)
-			return p, nil
-		}
+	if config.NbTasks <= 0 {
+		// we need to figure out a default value.
+		// if set set nb tasks to nb chunks, we will have an ~optimal number of operation
+		// but we will not utilize all the resources the caller may have (if nbCpus >> nbChunks)
+		// in such cases (nbCpus >> nbChunks), we will split the multi exp recursively
+		// but that may be overkill for small sizes since it does not give optimal complexity.
+		// so we need to find a good balance.
+
+		config.NbTasks = int(math.Max(float64(runtime.NumCPU()), float64(nbChunks)))
+	}
+
+	if len(points) < 64 {
+		config.NbTasks = 1 // no need to parallelize
+	}
+
+	// we split recursively the multi exp if max concurrency is set but not reached.
+	if config.NbTasks > 1 && nbChunks < config.NbTasks && config.NbTasks-nbChunks > 3 {
+
+		// nbChunks < config.NbTasks means that we don't utilize all the resources
+		// the caller wants us to use.
+		config.NbTasks = int(math.Ceil(float64(config.NbTasks) / 2.0))
+
+		var _p G1Jac
+		chDone := make(chan struct{}, 1)
+		go func() {
+			_p.MultiExp(points[:nbPoints/2], scalars[:nbPoints/2], config)
+			close(chDone)
+		}()
+		p.MultiExp(points[nbPoints/2:], scalars[nbPoints/2:], config)
+		<-chDone
+		p.AddAssign(&_p)
+		return p, nil
 	}
 
 	_innerMsmG1(p, C, points, scalars, config)
@@ -157,8 +158,8 @@ func _innerMsmG1(p *G1Jac, c uint64, points []G1Affine, scalars []fr.Element, co
 	}
 
 	// we use a semaphore to limit the number of go routines running concurrently
-	sem := make(chan struct{}, config.MaxConcurrency*2)
-	for i := 0; i < config.MaxConcurrency; i++ {
+	sem := make(chan struct{}, config.NbTasks*2)
+	for i := 0; i < config.NbTasks; i++ {
 		sem <- struct{}{}
 	}
 	defer close(sem)
@@ -300,17 +301,8 @@ func (p *G2Jac) MultiExp(points []G2Affine, scalars []fr.Element, config ecc.Mul
 		return nil, errors.New("len(points) != len(scalars)")
 	}
 
-	if config.NbTasks <= 0 {
-		// if nbTasks is not set, use all available CPUs
-		config.NbTasks = runtime.NumCPU()
-	} else if config.NbTasks > 1024 {
+	if config.NbTasks > 1024 {
 		return nil, errors.New("invalid config: config.NbTasks > 1024")
-	}
-
-	if config.MaxConcurrency <= 0 {
-		config.MaxConcurrency = config.NbTasks
-	} else if config.MaxConcurrency > 1024 {
-		return nil, errors.New("invalid config: config.MaxConcurrency > 1024")
 	}
 
 	// here, we compute the best C for nbPoints
@@ -338,28 +330,38 @@ func (p *G2Jac) MultiExp(points []G2Affine, scalars []fr.Element, config ecc.Mul
 	C := bestC(nbPoints)
 	nbChunks := int(computeNbChunks(C))
 
-	// if we don't utilize all the tasks (CPU in the default case) that we could, let's see if it's worth it to split
-	if config.NbTasks > 1 && nbChunks < config.NbTasks {
-		// before splitting, let's see if we end up with more tasks than thread;
-		cPostSplit := bestC(nbPoints / 2)
-		nbChunksPostSplit := int(computeNbChunks(cPostSplit))
-		nbTasksPostSplit := nbChunksPostSplit * 2
-		newNbTasks := int(math.Ceil(float64(config.NbTasks) / 2.0))
-		if (nbTasksPostSplit <= newNbTasks) || (nbTasksPostSplit-newNbTasks) <= (config.NbTasks-nbChunks) {
-			// if postSplit we still have less tasks than available CPU
-			// or if we have more tasks BUT the difference of CPU usage is in our favor, we split.
-			config.NbTasks = newNbTasks
-			var _p G2Jac
-			chDone := make(chan struct{}, 1)
-			go func() {
-				_p.MultiExp(points[:nbPoints/2], scalars[:nbPoints/2], config)
-				close(chDone)
-			}()
-			p.MultiExp(points[nbPoints/2:], scalars[nbPoints/2:], config)
-			<-chDone
-			p.AddAssign(&_p)
-			return p, nil
-		}
+	if config.NbTasks <= 0 {
+		// we need to figure out a default value.
+		// if set set nb tasks to nb chunks, we will have an ~optimal number of operation
+		// but we will not utilize all the resources the caller may have (if nbCpus >> nbChunks)
+		// in such cases (nbCpus >> nbChunks), we will split the multi exp recursively
+		// but that may be overkill for small sizes since it does not give optimal complexity.
+		// so we need to find a good balance.
+
+		config.NbTasks = int(math.Max(float64(runtime.NumCPU()), float64(nbChunks)))
+	}
+
+	if len(points) < 64 {
+		config.NbTasks = 1 // no need to parallelize
+	}
+
+	// we split recursively the multi exp if max concurrency is set but not reached.
+	if config.NbTasks > 1 && nbChunks < config.NbTasks && config.NbTasks-nbChunks > 3 {
+
+		// nbChunks < config.NbTasks means that we don't utilize all the resources
+		// the caller wants us to use.
+		config.NbTasks = int(math.Ceil(float64(config.NbTasks) / 2.0))
+
+		var _p G2Jac
+		chDone := make(chan struct{}, 1)
+		go func() {
+			_p.MultiExp(points[:nbPoints/2], scalars[:nbPoints/2], config)
+			close(chDone)
+		}()
+		p.MultiExp(points[nbPoints/2:], scalars[nbPoints/2:], config)
+		<-chDone
+		p.AddAssign(&_p)
+		return p, nil
 	}
 
 	_innerMsmG2(p, C, points, scalars, config)
@@ -384,8 +386,8 @@ func _innerMsmG2(p *G2Jac, c uint64, points []G2Affine, scalars []fr.Element, co
 	}
 
 	// we use a semaphore to limit the number of go routines running concurrently
-	sem := make(chan struct{}, config.MaxConcurrency*2)
-	for i := 0; i < config.MaxConcurrency; i++ {
+	sem := make(chan struct{}, config.NbTasks*2)
+	for i := 0; i < config.NbTasks; i++ {
 		sem <- struct{}{}
 	}
 	defer close(sem)

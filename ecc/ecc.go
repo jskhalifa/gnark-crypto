@@ -115,10 +115,5 @@ func modulus(c *config.Curve, scalarField bool) *big.Int {
 
 // MultiExpConfig enables to set optional configuration attribute to a call to MultiExp
 type MultiExpConfig struct {
-	// target number of tasks for the multiexp. can be larger than num cpus.
-	// if 0, runtime.NumCPU() is used.
 	NbTasks int
-
-	// max number of go routines running in parallel. if 0, NbTasks is used.
-	MaxConcurrency int
 }
